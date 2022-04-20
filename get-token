@@ -1,0 +1,70 @@
+import java.io.BufferedReader;
+import java.io.DataOutputStream;        
+import java.nio.charset.StandardCharsets;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.Proxy;
+import java.net.InetSocketAddress;
+import org.apache.commons.json.JSONObject;
+
+String proxyHostname = (String)wfc.getWFContent("proxyHostname");
+String proxyPort = (String)wfc.getWFContent("proxyPort");
+String ssoEndPoint = (String)wfc.getWFContent("ssoEndPoint");
+String urlParameters = (String)wfc.getWFContent("body");
+HttpURLConnection conn = null;
+DataOutputStream wr = null;
+JSONObject jsonObj = null;
+StringBuffer response = new StringBuffer();
+BufferedReader in = null;
+byte[] postData = urlParameters.getBytes( StandardCharsets.UTF_8 );
+int postDataLength = postData.length;
+try{
+   Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHostname,Integer.parseInt(proxyPort)));
+   URL url = new URL( ssoEndPoint );
+   conn= (HttpURLConnection) url.openConnection(proxy);          
+   conn.setDoOutput(true);
+   conn.setInstanceFollowRedirects(false);
+   conn.setRequestMethod("POST");
+   conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+   conn.setRequestProperty("charset", "utf-8");
+   conn.setRequestProperty("Content-Length", Integer.toString(postDataLength ));
+   conn.setUseCaches(false);
+   wr = new DataOutputStream(conn.getOutputStream());
+   wr.write( postData );
+   try {
+      if(conn.getResponseCode() != HttpURLConnection.HTTP_OK) {
+         in = new BufferedReader(    new InputStreamReader(conn.getErrorStream()));
+      }else {
+         in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+      }
+      String inputLine;
+      while ((inputLine = in.readLine()) != null) {
+        response.append(inputLine);
+      }
+   }catch(Exception ex){
+      wfc.addWFContent("HTTPResponse",ex.getMessage());  
+      wfc.addWFContent("ResponseCode",Integer.toString(conn.getResponseCode()));
+      throw new Exception("ERROR: "+ ex.getMessage() );
+   }
+}catch (Exception ex) {
+    wfc.addWFContent("HTTPResponse",ex.getMessage());
+    wfc.addWFContent("ResponseCode",Integer.toString(conn.getResponseCode()));
+    throw new Exception("ERROR: "+ ex.getMessage() );
+}finally{
+    conn.disconnect();
+    if (in != null){
+        in.close();
+    }
+    if (wr != null){
+        wr.close();
+    }
+
+}
+jsonObj = new JSONObject(response.toString());
+String accessToken = jsonObj.getString("access_token");
+wfc.addWFContent("access_token",accessToken.toString());
+wfc.setAdvancedStatus("POST");        
+wfc.setBasicStatus(000);
+return "000";
